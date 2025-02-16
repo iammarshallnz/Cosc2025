@@ -1,82 +1,129 @@
 import sys
 import time
 import socket
-
 import select
-def loadConfig(file : str) -> tuple: # does all loading and checking of config
+from typing import List, Tuple, Optional
+
+# Constants
+LOCALHOST = 'localhost'
+BUFFER_SIZE = 1024
+PING_INTERVAL = 2  # seconds
+DEFAULT_TIMEOUT = 1  # second
+
+class ConfigError(Exception):
+    """Custom exception for configuration file errors."""
+    pass
+
+def parse_router_id(line: str) -> int:
+    """Extract and validate router ID from config line."""
     try:
-        #print(file)
-        config : list = open(file[0]).readlines() # open file and read lines to list
+        return int(line.split()[1])
+    except (IndexError, ValueError):
+        raise ConfigError("Invalid router ID format")
+
+def parse_input_ports(line: str) -> List[int]:
+    """Extract and validate input ports from config line."""
+    try:
+        return [int(x.strip(',')) for x in line.split()[1:]]
+    except ValueError:
+        raise ConfigError("Invalid input ports format")
+
+def parse_neighbor_info(line: str) -> List[Tuple[int, int, int]]:
+    """Extract and validate neighbor information from config line.
+    Returns list of tuples: (input_port, link_cost, router_id)
+    """
+    try:
+        return [tuple(int(i) for i in x.strip(',').split('-')) 
+                for x in line.split()[1:]]
+    except ValueError:
+        raise ConfigError("Invalid neighbor info format")
+
+def load_config(config_file: str) -> Tuple[int, List[int], List[Tuple[int, int, int]]]:
+    """Load and validate router configuration from file.
+    
+    Args:
+        config_file: Path to configuration file
         
-        routerId : int = int( config[0].split()[1]) #takes config [0]
-        inputPorts : list[int] = [int(x.strip(',')) for x in config[1].split()[1:]] #takes config [1 ] splits fopr each into list
-        neighboorInfo : list[tuple[int, int, int]] = [tuple(int(i) for i in x.strip(',').split('-')) for x in config[2].split()[1:]] #takes config [2] splits for each in list
-        # neighboorInfo (input port , link cost , routerId)
-        return routerId, inputPorts, neighboorInfo #returns each in 3 tuple
-    except:
-        print("Error in config file")
-
-def receiver(any_socket: socket.SocketType) -> tuple:
-
-    # gets date and address
+    Returns:
+        Tuple containing:
+        - router_id: Unique identifier for this router
+        - input_ports: List of ports this router listens on
+        - neighbor_info: List of (port, cost, router_id) for neighbors
+        
+    Raises:
+        ConfigError: If configuration is invalid
+    """
     try:
-        message, ret_ip = any_socket.recvfrom(1024)
+        with open(config_file) as f:
+            lines = f.readlines()
+            
+        if len(lines) < 3:
+            raise ConfigError("Configuration file must have at least 3 lines")
+            
+        router_id = parse_router_id(lines[0])
+        input_ports = parse_input_ports(lines[1])
+        neighbor_info = parse_neighbor_info(lines[2])
+        
+        return router_id, input_ports, neighbor_info
+    
+    except (IOError, IndexError) as e:
+        raise ConfigError(f"Error reading config file: {e}")
 
-        # ret_ip is tuple (ip, port)
-    except TimeoutError:
-        print("ERROR: Receiving timed out, dropping packet")
+def setup_sockets(input_ports: List[int]) -> List[socket.socket]:
+    """Create and bind UDP sockets for all input ports.
+    
+    Args:
+        input_ports: List of ports to listen on
+        
+    Returns:
+        List of configured socket objects
+    """
+    sockets = []
+    for port in input_ports:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((LOCALHOST, port))
+        sock.setblocking(False)
+        sockets.append(sock)
+    return sockets
+
+def receive_message(sock: socket.socket) -> Optional[Tuple[bytes, Tuple]]:
+    """Receive and validate incoming message from socket.
+    
+    Returns:
+        Tuple of (message, address) if successful, None if error
+    """
+    try:
+        message, address = sock.recvfrom(BUFFER_SIZE)
+        return message, address
+    except (TimeoutError, BlockingIOError):
         return None
     except Exception as e:
-        print(f"ERROR: Receiving failed: {e}, dropping packet")
+        print(f"ERROR: Receiving failed: {e}")
         return None
-    return (message, ret_ip)
 
-
-def sendPing(originSocket : socket.socket, neighboorInfo : tuple):
-    """Sends a ping message to a neighbor."""
+def send_ping(sock: socket.socket, neighbor: Tuple[int, int, int]) -> None:
+    """Send ping message to neighbor router.
+    
+    Args:
+        sock: Socket to send from
+        neighbor: Tuple of (port, cost, router_id)
+    """
     try:
-        message = f"Ping from {originSocket.getsockname()} to {neighboorInfo}"
-        originSocket.sendto(message.encode(), ('localhost', neighboorInfo[0]))
+        message = f"Ping from {sock.getsockname()} to {neighbor}"
+        sock.sendto(message.encode(), (LOCALHOST, neighbor[0]))
         print(f"Sent: {message}")
     except Exception as e:
         print(f"ERROR: Failed to send ping: {e}")
+
 def main():
-    # main function
-    
-    ## TODO #1
-    argv = sys.argv[1:] # plug in arg later ?? 
-    #print(loadConfig(argv))
-    routerId, inputPorts, neighboorInfo = loadConfig(argv)
-    open_Sockets = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for port in inputPorts] #scalable with config] # holding objects to close later  ???
-    readableSockets = []
-    
-    for port in inputPorts: #scalable with config
-        temp = open_Sockets.pop()
-        temp.bind(('localhost', port))
-        temp.setblocking(False)
-        readableSockets.append(temp) # bind each socket 
-    sendingSocket : socket.socket = readableSockets[0]   # take one of the sockets as main out going
-    lastSendTime = time.time()
-    
-        
-    while 1:
-        r, _, _ = select.select(readableSockets, [], [], 1) #BLOCKS TILL TIMEOUT, 0 is polling 
-        \
-        for readable in r: # enters for when readable is Ready
-            
-            data = receiver(readable)
-            if data:
-                data, addr = data
-                print(f'\nhello {addr} : {data.decode()}')
-        
-            
-        # Periodically send pings to neighbors
-        currentTime = time.time()
-        if currentTime - lastSendTime >= 2:  # Send every 5 seconds
-            for neighbor in neighboorInfo:
-                sendPing(readableSockets[0], neighbor)  # Use the first socket for sending
-            lastSendTime = currentTime
+    try:
+        config_file = sys.argv[1]
+        config = RouterConfig(config_file)
+        router = Router(config)
+        router.run()
+    except (ConfigError, IndexError) as e:
+        print(f"Configuration error: {e}")
+        sys.exit(1)
 
-    
-
-main()
+if __name__ == "__main__":
+    main()
