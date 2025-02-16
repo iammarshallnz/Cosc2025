@@ -74,6 +74,6 @@ def main():
                 sendPing(readableSockets[0], neighbor)  # Use the first socket for sending
             lastSendTime = currentTime
 
-    
+    # Close all sockets ??
 
 main()
