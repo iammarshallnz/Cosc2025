@@ -5,7 +5,6 @@ import socket
 import select
 def loadConfig(file : str) -> tuple: # does all loading and checking of config
     try:
-        #print(file)
         config : list = open(file[0]).readlines() # open file and read lines to list
         
         routerId : int = int( config[0].split()[1]) #takes config [0]
@@ -45,7 +44,6 @@ def main():
     
     ## TODO #1
     argv = sys.argv[1:] # plug in arg later ?? 
-    #print(loadConfig(argv))
     routerId, inputPorts, neighboorInfo = loadConfig(argv)
     open_Sockets = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for port in inputPorts] #scalable with config] # holding objects to close later  ???
     readableSockets = []
