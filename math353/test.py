@@ -119,4 +119,37 @@ def W4L2():
         x = x - JF(x).LUsolve(F(x))
         print(F(x).norm())
 #W4L2()
+def P4Q1():
+    from sympy import symbols, exp, diff, solve, Matrix
+    import math
+    JF = lambda x : Matrix([[-1, -math.sin(x[1])], [math.cos(x[0]), -1]])
+    F = lambda x : Matrix([math.cos(x[1]) - x[0], math.sin(x[0]) - x[1]])
+    x = Matrix([[0.4],[0.2]]) # starting point
+    for i in range(2):
+        x = x - JF(x).LUsolve(F(x))
+        print(x)
+#P4Q1()
 
+
+
+import matplotlib.pyplot as plt
+
+# Sample data
+x_values = [1, 2, 3, 4, 5, 6, 7, 8]  # X-axis values
+y_values = [102.7/102.7, 102.7/62.9, 102.7/47.06, 102.7/38.8, 102.7/38.8, 102.7/35.6, 102.7/33.4, 102.7/31.6]  # Y-axis values
+
+# Create an X-Y plot (line plot)
+plt.plot(x_values, y_values, marker='o', linestyle='-', color='blue', label='Data Series')
+
+# Add labels and title
+plt.xlabel('X-axis Label')
+plt.ylabel('Y-axis Label')
+plt.title('X-Y Plot speed increase over time')
+
+# Add a legend
+plt.legend()
+
+# Show the plot
+plt.grid(True, linestyle='--', alpha=0.7)  # Add grid lines
+plt.tight_layout()  # Adjust layout
+plt.show()
